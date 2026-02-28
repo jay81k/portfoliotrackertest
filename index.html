@@ -1781,13 +1781,11 @@
                 const usdTrades = dashboardFilteredTrades.filter(t => !isCAD(t.symbol));
                 const cadTrades = dashboardFilteredTrades.filter(t => isCAD(t.symbol));
                 const calcReturn = (tradeList) => tradeList.reduce((sum, t) => {
-                    const capitalGains = t.exitDate ? getEffectiveProfit(t) : 0;
-                    const partialProfit = (t.partialExits && t.partialExits.length > 0)
-                        ? t.partialExits.reduce((s, pe) => s + (pe.profit || 0), 0) : 0;
+                    const capitalGains = t.exitDate ? getTotalProfit(t) : ((t.partialExits && t.partialExits.length > 0) ? t.partialExits.reduce((s, pe) => s + (pe.profit || 0), 0) : 0);
                     const dividends = t.dividendEntries && t.dividendEntries.length > 0
                         ? t.dividendEntries.reduce((s, e) => s + e.amount, 0)
                         : (t.dividend || 0);
-                    return sum + capitalGains + partialProfit + dividends;
+                    return sum + capitalGains + dividends;
                 }, 0);
                 const usdProfit = calcReturn(usdTrades);
                 const cadProfit = calcReturn(cadTrades);
@@ -2302,14 +2300,24 @@
                                                     )}
                                                 </div>
                                                 {!isEditing && (
-                                                    <button
-                                                        title="Rename portfolio"
-                                                        onClick={e => { e.stopPropagation(); setEditingPortfolioId(p.id); setEditingPortfolioName(p.name); }}
-                                                        onMouseEnter={e => { e.currentTarget.style.color = T.textPrimary; e.currentTarget.style.opacity = '1'; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.color = T.textFaint; e.currentTarget.style.opacity = '0.5'; }}
-                                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.textFaint, opacity: '0.5', padding: '0.1rem 0.2rem', flexShrink: 0, lineHeight: 1, transition: 'all 0.12s', display: 'flex', alignItems: 'center' }}>
-                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                                    </button>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                        <button
+                                                            title="Rename portfolio"
+                                                            onClick={e => { e.stopPropagation(); setEditingPortfolioId(p.id); setEditingPortfolioName(p.name); }}
+                                                            onMouseEnter={e => { e.currentTarget.style.color = T.textPrimary; e.currentTarget.style.opacity = '1'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.color = T.textFaint; e.currentTarget.style.opacity = '0.5'; }}
+                                                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.textFaint, opacity: '0.5', padding: '0.1rem 0.2rem', flexShrink: 0, lineHeight: 1, transition: 'all 0.12s', display: 'flex', alignItems: 'center' }}>
+                                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                                        </button>
+                                                        <button
+                                                            title="Delete portfolio"
+                                                            onClick={e => { e.stopPropagation(); handleDeletePortfolio(p.id); }}
+                                                            onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.opacity = '1'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.color = T.textFaint; e.currentTarget.style.opacity = '0.5'; }}
+                                                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.textFaint, opacity: '0.5', padding: '0.1rem 0.2rem', flexShrink: 0, lineHeight: 1, transition: 'all 0.12s', display: 'flex', alignItems: 'center' }}>
+                                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         );
@@ -2799,6 +2807,28 @@
                                                                 <span style={{ color: T.green }}>+</span> Bonuses<br/>
                                                                 <div style={{ height: '1px', background: T.border, margin: '5px 0' }} />
                                                                 <span style={{ color: T.textFaint }}>Fees deducted from each trade's profit. Unrealized gains on open positions are not included.</span>
+                                                                {(currencyReturns.usdProfit !== 0 || currencyReturns.cadProfit !== 0) && (
+                                                                    <>
+                                                                        <div style={{ height: '1px', background: T.border, margin: '5px 0' }} />
+                                                                        <strong style={{ color: T.textPrimary, display: 'block', marginBottom: '4px' }}>Breakdown by currency</strong>
+                                                                        {currencyReturns.usdProfit !== 0 && (
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+                                                                                <span>🇺🇸 USD</span>
+                                                                                <span style={{ color: currencyReturns.usdProfit >= 0 ? T.green : T.red, fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                    {currencyReturns.usdProfit >= 0 ? '+' : ''}${Math.abs(currencyReturns.usdProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                        {currencyReturns.cadProfit !== 0 && (
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+                                                                                <span>🇨🇦 CAD</span>
+                                                                                <span style={{ color: currencyReturns.cadProfit >= 0 ? T.green : T.red, fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                    {currencyReturns.cadProfit >= 0 ? '+' : ''}${Math.abs(currencyReturns.cadProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <button className="balance-dots"
@@ -4154,10 +4184,7 @@
 
                 // Return on Deployed Capital
                 const totalCostBasisClosed = closedTrades.reduce((s, t) => s + (t.entryPrice * (t.originalQty || t.qty)), 0);
-                const totalRealizedProfit = closedTrades.reduce((s, t) => {
-                    const partialProfit = (t.partialExits && t.partialExits.length > 0) ? t.partialExits.reduce((ps, pe) => ps + (pe.profit || 0), 0) : 0;
-                    return s + getEffectiveProfit(t) + partialProfit;
-                }, 0);
+                const totalRealizedProfit = closedTrades.reduce((s, t) => s + getTotalProfit(t), 0);
                 const totalDividends = statsTrades.reduce((s, t) => {
                     if (t.dividendEntries && t.dividendEntries.length > 0) return s + t.dividendEntries.reduce((ds, e) => ds + e.amount, 0);
                     return s + (t.dividend || 0);
