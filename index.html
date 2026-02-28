@@ -1149,7 +1149,7 @@
                         setAllPortfolioTrades(allData.flat());
                     })();
                 }
-            }, [portfolioViewMode, portfolios, view]);
+            }, [portfolioViewMode, portfolios, view, trades]);
 
             useEffect(() => {
                 setDividendAddActive(false);
@@ -1366,7 +1366,10 @@
                     qty: exitQty,
                     exitPrice: parseFloat(partialExitForm.exitPrice),
                     exitDate: partialExitForm.exitDate,
-                    profit: editingTrade.direction === 'short' ? (editingTrade.entryPrice - parseFloat(partialExitForm.exitPrice)) * exitQty : (parseFloat(partialExitForm.exitPrice) - editingTrade.entryPrice) * exitQty
+                    profit: (editingTrade.direction === 'short'
+                        ? (editingTrade.entryPrice - parseFloat(partialExitForm.exitPrice)) * exitQty
+                        : (parseFloat(partialExitForm.exitPrice) - editingTrade.entryPrice) * exitQty)
+                        - ((exitQty / (editingTrade.originalQty || editingTrade.qty)) * (editingTrade.fees || 0))
                 };
 
                 const updatedTrade = {
@@ -1417,7 +1420,10 @@
                     qty: exitQty,
                     exitPrice: parseFloat(partialExitForm.exitPrice),
                     exitDate: partialExitForm.exitDate,
-                    profit: editingTrade.direction === 'short' ? (editingTrade.entryPrice - parseFloat(partialExitForm.exitPrice)) * exitQty : (parseFloat(partialExitForm.exitPrice) - editingTrade.entryPrice) * exitQty
+                    profit: (editingTrade.direction === 'short'
+                        ? (editingTrade.entryPrice - parseFloat(partialExitForm.exitPrice)) * exitQty
+                        : (parseFloat(partialExitForm.exitPrice) - editingTrade.entryPrice) * exitQty)
+                        - ((exitQty / (editingTrade.originalQty || editingTrade.qty)) * (editingTrade.fees || 0))
                 };
 
                 const profitDifference = updatedPartialExit.profit - oldExit.profit;
@@ -1913,16 +1919,15 @@
                         if (stored?.value) {
                             try { trades = JSON.parse(stored.value); } catch(e) {}
                         }
-                        return { id: p.id, name: p.name, trades };
+                        return { id: p.id, name: p.name, trades, balances: loadBalancesForPortfolio(p.id) };
                     })
                 );
                 const backup = {
-                    version: 3,
+                    version: 4,
                     exportedAt: new Date().toISOString(),
                     portfolios: allPortfolioData,
                     activePortfolioId,
-                    startingBalances,
-                    // v2 compat: also export active portfolio's trades at top level
+                    startingBalances, // v3 compat
                     trades
                 };
                 const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -1950,7 +1955,7 @@
                             const confirmMsg = `This will replace all current portfolios with ${backup.portfolios.length} portfolio(s) and ${totalTrades} total trades from the backup (exported ${new Date(backup.exportedAt).toLocaleDateString()}).${hasBalances ? ' Account balances and bonuses will also be restored.' : ''} Continue?`;
                             if (!window.confirm(confirmMsg)) return;
 
-                            // Restore each portfolio's trades
+                            // Restore each portfolio's trades and balances
                             for (const p of backup.portfolios) {
                                 const migrated = p.trades.map(trade => ({
                                     ...trade,
@@ -1961,6 +1966,13 @@
                                     direction: trade.direction || 'long'
                                 }));
                                 await window.storage.set(`portfolio_trades_${p.id}`, JSON.stringify(migrated));
+                                // v4: each portfolio has its own balances object
+                                // v3 fallback: only active portfolio had balances at top level
+                                if (p.balances) {
+                                    saveBalancesForPortfolio(p.id, p.balances);
+                                } else if (hasBalances && p.id === backup.activePortfolioId) {
+                                    saveBalancesForPortfolio(p.id, backup.startingBalances);
+                                }
                             }
 
                             // Restore portfolio list and active portfolio
@@ -1969,11 +1981,8 @@
                             const restoredActiveId = backup.activePortfolioId || restoredPortfolios[0].id;
                             setActivePortfolioId(restoredActiveId);
                             try { localStorage.setItem('pt_active_portfolio', restoredActiveId); } catch(e) {}
+                            setStartingBalances(loadBalancesForPortfolio(restoredActiveId));
 
-                            if (hasBalances) {
-                                setStartingBalances(backup.startingBalances);
-                                try { saveBalancesForPortfolio(activePortfolioId, backup.startingBalances); } catch(e) {}
-                            }
                             showToast("success", "Portfolio Restored", `${backup.portfolios.length} portfolio(s) and ${totalTrades} trades restored.`);
 
                         } else if (backup.trades && Array.isArray(backup.trades)) {
@@ -3246,12 +3255,12 @@
                                             const lastNWins = lastN.filter(t => {
                                                 const cb = beType === '%' ? (t.entryPrice||0)*(t.originalQty||t.qty||0) : null;
                                                 const thr = beType === '%' && cb > 0 ? (beThreshold/100)*cb : beThreshold;
-                                                return t.profit > thr;
+                                                return getTotalProfit(t) > thr;
                                             }).length;
                                             const lastNLosses = lastN.filter(t => {
                                                 const cb = beType === '%' ? (t.entryPrice||0)*(t.originalQty||t.qty||0) : null;
                                                 const thr = beType === '%' && cb > 0 ? (beThreshold/100)*cb : beThreshold;
-                                                return t.profit < -thr;
+                                                return getTotalProfit(t) < -thr;
                                             }).length;
                                             const lastNWinRate = lastNWins + lastNLosses > 0 ? (lastNWins / (lastNWins + lastNLosses)) * 100 : 0;
                                             const delta = closedSorted.length >= 2 ? lastNWinRate - metrics.winRate : null;
@@ -5073,22 +5082,36 @@
                                         const equityTrades = sortedClosed.filter(t => t.exitDate);
                                         if (equityTrades.length < 2) return null;
 
-                                        // Build a unified event timeline:
-                                        // closed trades (by exitDate) + open trade dividend entries (by their own date)
-                                        const openDivEvents = [];
-                                        statsTrades.filter(t => !t.exitDate).forEach(t => {
-                                            (t.dividendEntries || []).forEach(e => {
-                                                if (e.amount && e.date) openDivEvents.push({ date: e.date, amount: e.amount, label: t.symbol, isDividend: true });
+                                        // Build a unified event timeline mirroring the dashboard chartData:
+                                        // 1) full closes (getEffectiveProfit — remaining qty after partials)
+                                        // 2) partial exits (each pe dated individually)
+                                        // 3) dividends (dated entries when available, flat fallback on exit/entry date)
+                                        // All of statsTrades so open trade partials and dividends are included
+                                        const rawEvents = [];
+                                        statsTrades.forEach(t => {
+                                            // 1. Full close
+                                            if (t.exitDate) {
+                                                rawEvents.push({ date: t.exitDate, amount: getEffectiveProfit(t), label: t.symbol, isDividend: false });
+                                            }
+                                            // 2. Partial exits
+                                            (t.partialExits || []).forEach(pe => {
+                                                if (pe.exitDate) rawEvents.push({ date: pe.exitDate, amount: pe.profit || 0, label: t.symbol, isDividend: false, isPartial: true });
                                             });
-                                            // fallback: flat dividend with no entries — use entryDate
-                                            if ((!t.dividendEntries || t.dividendEntries.length === 0) && t.dividend) {
-                                                openDivEvents.push({ date: t.entryDate || '9999', amount: t.dividend, label: t.symbol, isDividend: true });
+                                            // 3. Dividends — dated entries first, flat fallback
+                                            if (t.dividendEntries && t.dividendEntries.length > 0) {
+                                                t.dividendEntries.forEach(e => {
+                                                    if (e.amount && e.date) rawEvents.push({ date: e.date, amount: e.amount, label: t.symbol, isDividend: true });
+                                                });
+                                            } else if (t.dividend) {
+                                                const fallbackDate = t.exitDate || t.entryDate;
+                                                if (fallbackDate) rawEvents.push({ date: fallbackDate, amount: t.dividend, label: t.symbol, isDividend: true });
                                             }
                                         });
-
-                                        // Merge closed trades and open dividends, sorted by date
-                                        const closedEvents = equityTrades.map(t => ({ date: t.exitDate, amount: getEffectiveProfit(t) + (t.dividend || 0), label: t.symbol, isDividend: false }));
-                                        const allEvents = [...closedEvents, ...openDivEvents].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+                                        const allEvents = rawEvents.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+                                        const totalOpenDivs = statsTrades.filter(t => !t.exitDate).reduce((s, t) => {
+                                            if (t.dividendEntries && t.dividendEntries.length > 0) return s + t.dividendEntries.reduce((ds, e) => ds + (e.amount || 0), 0);
+                                            return s + (t.dividend || 0);
+                                        }, 0);
 
                                         // Build cumulative equity and drawdown arrays
                                         let cumulative = 0;
@@ -5099,14 +5122,13 @@
                                         let tradeNum = 0;
                                         allEvents.forEach(ev => {
                                             cumulative += ev.amount;
-                                            if (!ev.isDividend) tradeNum++;
+                                            if (!ev.isDividend && !ev.isPartial) tradeNum++;
                                             equityPoints.push(cumulative);
                                             if (cumulative > peak) peak = cumulative;
                                             drawdownPoints.push(Math.min(0, cumulative - peak));
-                                            eventLabels.push(ev.isDividend ? ev.label : '#' + tradeNum);
+                                            eventLabels.push(ev.isDividend ? `${ev.label} div` : ev.isPartial ? `${ev.label} partial` : `#${tradeNum} ${ev.label}`);
                                         });
                                         const axisLabels = allEvents.map((_, i) => i + 1);
-                                        const totalOpenDivs = openDivEvents.reduce((s, e) => s + e.amount, 0);
 
                                         const EquityCurveChart = () => {
                                             const canvasRef = React.useRef(null);
