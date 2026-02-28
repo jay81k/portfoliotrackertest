@@ -5695,29 +5695,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                                <button onClick={() => { resetFormData(); setShowAddTrade(true); }} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: T.green, color: T.pageBg, border: 'none', padding: '0.55rem 1.1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '0.78rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}><Plus size={14} /> Add Trade</button>
-                                <div style={{ position: 'relative' }}>
-                                    <button onClick={() => setShowDataMenu(v => !v)} style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted, padding: '0', borderRadius: '6px', cursor: 'pointer', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem' }}>▾</button>
-                                    {showDataMenu && (
-                                        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: T.surfaceBg, border: `1px solid ${T.borderStrong}`, borderRadius: '6px', zIndex: 200, minWidth: '180px', overflow: 'hidden', boxShadow: T.shadowMd }} onMouseLeave={() => setShowDataMenu(false)}>
-                                            <button onClick={() => { setShowCSVUpload(true); setShowDataMenu(false); }} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.blue, padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                <Upload size={15} /> Upload CSV
-                                            </button>
-                                            <button onClick={() => { handleExportCSV(); setShowDataMenu(false); }} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.green, padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                <Download size={15} /> Export CSV
-                                            </button>
-                                            <button onClick={() => { handleExportJSON(); setShowDataMenu(false); }} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.amber, padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                <Download size={15} /> Backup JSON
-                                            </button>
-                                            <label style={{ width: '100%', background: 'transparent', border: 'none', color: T.amber, padding: '0.75rem 1rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem', boxSizing: 'border-box' }}>
-                                                <Upload size={15} /> Restore JSON
-                                                <input type="file" accept=".json" onChange={(e) => { handleImportJSON(e); setShowDataMenu(false); }} style={{ display: 'none' }} />
-                                            </label>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+
                         </div>
 
                         <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
