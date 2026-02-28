@@ -229,7 +229,7 @@
 
     <!-- ─── Risk Calculator (embedded) ────────────────────── -->
     <div id="rc-wrap">
-      <div class="rc-overlay" id="rc-overlay" onclick="onOverlayClick(event)">
+      <div class="rc-overlay" id="rc-overlay">
         <div class="rc-modal" id="rc-modal">
           <div class="rc-header">
             <div class="rc-header-left"></div>
@@ -239,6 +239,7 @@
                 <button class="ls-btn active-long" id="btn-long"  onclick="setDir('long')">↑ Long</button>
                 <button class="ls-btn"             id="btn-short" onclick="setDir('short')">↓ Short</button>
               </div>
+              <div style="width:1px;height:20px;background:var(--rc-border);margin:0 8px;flex-shrink:0"></div>
               <button class="rc-close" onclick="closeCalc()">✕</button>
             </div>
           </div>
@@ -6434,7 +6435,7 @@
       document.getElementById('rc-overlay').classList.remove('open');
     }
     function onOverlayClick(e) {
-      if (e.target.id === 'rc-overlay') closeCalc();
+
     }
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCalc(); });
 
